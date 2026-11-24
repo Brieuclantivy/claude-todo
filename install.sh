@@ -41,4 +41,21 @@ else
   echo "~/todo/TODO.md créé (vide). Sauvegarde Nextcloud non configurée : voir README.md"
 fi
 
-echo "Installation terminée. Relance Claude Code (ou ouvre /hooks) pour charger le hook."
+# 4. Mod d'affichage (carte sous Skill(todo) + bandeau) : ce dépôt est son marketplace
+if command -v claude >/dev/null; then
+  if ! claude plugin marketplace list 2>/dev/null | grep -q 'claude-todo'; then
+    claude plugin marketplace add "$REPO"
+  else
+    claude plugin marketplace update claude-todo
+  fi
+
+  if claude plugin list 2>/dev/null | grep -q 'todo-affichage@claude-todo'; then
+    claude plugin update todo-affichage@claude-todo
+  else
+    claude plugin install todo-affichage@claude-todo
+  fi
+else
+  echo "claude introuvable : mod d'affichage non installé (relancer install.sh plus tard)"
+fi
+
+echo "Installation terminée. Relance Claude Code pour charger le hook et le mod."

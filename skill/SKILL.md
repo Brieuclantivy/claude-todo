@@ -46,7 +46,8 @@ Règles :
 3. Ajoute un `ctx :` avec ce qui permettra de reprendre sans la conversation : fichiers et lignes, branche, période ou jeu de données, cas particulier, chiffres clés. Reste concis : 1 à 3 sous-puces.
 4. Insère l'entrée à la fin de la bonne sous-section, puis confirme en une ligne : `#14 ajoutée à qspresse › Questions client`.
 
-**Lister** :
+**Lister** : si l'outil `mcp__todo-affichage__afficher` est disponible (mod `todo-affichage`), utilise-le. Il affiche une carte stylisée au user, alors ne répète pas la liste dans ta réponse : une ligne suffit (et, pour une réunion, l'offre d'un mail). Sinon, liste en Markdown comme ci-dessous.
+- Avec l'outil : `vue: "todo"` (avec `projet` pour un seul projet), ou `vue: "reunion"` avec `projet` et `themes` (questions reformulées et regroupées comme décrit plus bas, chaque point avec l'id de son entrée).
 - « ma todo » / « ma todo list » → toutes les entrées ouvertes `- [ ]`, tous projets, groupées par projet puis tâches et questions.
 - « à faire sur X » → les entrées ouvertes du projet X (tâches, puis questions client).
 - « de quoi parler au client / en réunion » → les questions client ouvertes du projet courant (ou du projet nommé). Regroupe-les par thème et reformule-les pour le client, sans jargon de code ni chemins de fichiers. Mets les `[prio]` en premier. Propose d'en faire un mail si c'est utile.

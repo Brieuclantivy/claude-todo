@@ -4,6 +4,10 @@ TODO et questions client par projet, gérées par Claude Code dans tous les proj
 
 - **Skill `todo`** : ajouter, lister, cocher, noter la réponse du client. Il se déclenche avec des phrases comme « ajoute ça à mes demandes client », « donne-moi ma todo », « de quoi je dois parler au client ? », « la 12 est faite ».
 - **Hook `SessionStart`** : affiche « 📋 projet : N tâches, M questions client ouvertes », une seule fois par jour et par projet.
+- **Mod `todo-affichage`** ([mod/](mod/)) :
+  - une carte stylisée sous l'appel du skill (ou sous le dernier outil qui a touché `TODO.md` pendant le tour), avec les entrées ouvertes du projet, celles ajoutées, cochées ou modifiées mises en évidence, les `PRIO` et les échéances ;
+  - un bandeau permanent au-dessus du prompt : « 📋 projet · N tâches · M questions client ».
+  - Tests : `claude plugin test mod`.
 - **Données** : `~/todo/TODO.md`, hors de ce dépôt car elles contiennent des informations client. Une copie part sur Nextcloud à chaque modification.
 
 ## Installer (nouveau PC)

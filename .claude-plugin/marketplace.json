@@ -1,0 +1,5 @@
+{
+  "name": "claude-todo",
+  "owner": { "name": "brieuc" },
+  "plugins": [{ "name": "todo-affichage", "source": "./mod" }]
+}
