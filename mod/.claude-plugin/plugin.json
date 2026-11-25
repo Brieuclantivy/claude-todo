@@ -1,6 +1,6 @@
 {
   "name": "todo-affichage",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Carte stylisée sous les appels du skill todo et bandeau des entrées ouvertes du projet",
   "types": "./types/index.d.ts"
 }

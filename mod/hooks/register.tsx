@@ -18,6 +18,8 @@ type Entree = {
   texte: string
   prio: boolean
   echeance: string | null
+  reunion: string | null
+  doc: boolean
   brut: string
 }
 
@@ -36,7 +38,7 @@ function parser(texte: string): Entree[] {
     }
 
     if (ligne.startsWith('### ')) {
-      type = /question/i.test(ligne) ? 'question' : 'tache'
+      type = /question|réunion/i.test(ligne) ? 'question' : 'tache'
       courante = null
       continue
     }
@@ -46,6 +48,7 @@ function parser(texte: string): Entree[] {
     if (m) {
       const reste = m[3] ?? ''
       const echeance = /\[échéance ([^\]]+)\]/i.exec(reste)
+      const reunion = /\[réunion ([^\]]+)\]/i.exec(reste)
       const nouvelle: Entree = {
         id: Number(m[2]),
         projet,
@@ -56,9 +59,12 @@ function parser(texte: string): Entree[] {
           .replace(/\s*✅\s*\S+/, '')
           .replace(/\s*\[prio\]/i, '')
           .replace(/\s*\[échéance [^\]]+\]/i, '')
+          .replace(/\s*\[réunion [^\]]+\]/i, '')
           .trim(),
         prio: /\[prio\]/i.test(reste),
         echeance: echeance?.[1] ?? null,
+        reunion: reunion?.[1]?.trim() ?? null,
+        doc: false,
         brut: ligne,
       }
       entrees.push(nouvelle)
@@ -68,6 +74,7 @@ function parser(texte: string): Entree[] {
 
     if (courante && /^\s+\S/.test(ligne)) {
       courante.brut += '\n' + ligne
+      courante.doc ||= /^\s+- doc\s*:/.test(ligne)
     } else {
       courante = null
     }
@@ -108,14 +115,7 @@ function construireCarte(
   const projets: ProjetVue[] = [...touches].map(nom => {
     const entrees: EntreeVue[] = vues
       .filter(v => v.entree.projet === nom && (!v.entree.fait || v.statut !== 'ouverte'))
-      .map(({ entree, statut }) => ({
-        id: entree.id,
-        type: entree.type,
-        texte: entree.texte,
-        prio: entree.prio,
-        echeance: entree.echeance,
-        statut,
-      }))
+      .map(({ entree, statut }) => ({ ...versVue(entree), statut }))
 
     return { nom, entrees }
   })
@@ -127,7 +127,7 @@ const OUTIL = 'mcp__todo-affichage__afficher'
 
 const DESCRIPTION_OUTIL = `Affiche au user, en carte stylisée sous l'appel, ses entrées TODO ouvertes (~/todo/TODO.md, skill todo).
 - vue "todo" : « ma todo », « à faire sur X ». projet omis = tous les projets.
-- vue "reunion" : « de quoi parler au client / en réunion ». Donne projet et themes : les questions client ouvertes regroupées par thème, reformulées pour le client (sans jargon ni chemins), les [prio] en premier ; chaque point garde l'id de son entrée.
+- vue "reunion" : « de quoi parler en réunion », « que préparer pour jeudi ». Donne reunion (slug de ~/todo/reunions.md, s'il existe), nom, date (de reunions.sh) et themes : les points de réunion ouverts regroupés par thème, reformulés pour la personne en face (sans jargon ni chemins), les [prio] en premier ; chaque point garde l'id de son entrée. Sans réunion définie, donne projet à la place de reunion.
 Après l'appel, ne répète pas la liste dans ta réponse : une ligne suffit.`
 
 const SCHEMA_OUTIL = {
@@ -135,6 +135,9 @@ const SCHEMA_OUTIL = {
   properties: {
     vue: { type: 'string', enum: ['todo', 'reunion'] },
     projet: { type: 'string', description: 'Nom de la section ## du TODO.md (nom approchant accepté).' },
+    reunion: { type: 'string', description: 'Vue reunion : slug de la réunion (tag [réunion <slug>]).' },
+    nom: { type: 'string', description: 'Vue reunion : nom affiché de la réunion.' },
+    date: { type: 'string', description: 'Vue reunion : prochaine séance, ex. "2026-11-26 14h".' },
     themes: {
       type: 'array',
       description: 'Vue reunion seulement.',
@@ -163,8 +166,19 @@ function normaliser(nom: string): string {
 }
 
 function versVue(e: Entree): EntreeVue {
-  return { id: e.id, type: e.type, texte: e.texte, prio: e.prio, echeance: e.echeance, statut: 'ouverte' }
+  return {
+    id: e.id,
+    type: e.type,
+    texte: e.texte,
+    prio: e.prio,
+    echeance: e.echeance,
+    reunion: e.reunion,
+    doc: e.doc,
+    statut: 'ouverte',
+  }
 }
+
+const chaine = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null)
 
 function carteAffichage(texte: string, input: Record<string, unknown>, projetDefaut: string): { carte: Carte; resume: string } {
   const ouvertes = parser(texte).filter(e => !e.fait)
@@ -173,7 +187,9 @@ function carteAffichage(texte: string, input: Record<string, unknown>, projetDef
   const trouver = (nom: string) => noms.find(n => normaliser(n) === normaliser(nom)) ?? nom
 
   if (input.vue === 'reunion') {
+    const slug = chaine(input.reunion)
     const projet = trouver(demande ?? projetDefaut)
+    const titre = chaine(input.nom) ?? (slug ? `Réunion ${slug}` : `Réunion — ${projet}`)
     const parId = new Map(ouvertes.map(e => [e.id, e]))
     const themesBruts = Array.isArray(input.themes) ? (input.themes as { titre?: unknown; points?: unknown }[]) : []
     let themes: ThemeVue[] = themesBruts.map(t => ({
@@ -186,20 +202,23 @@ function carteAffichage(texte: string, input: Record<string, unknown>, projetDef
           texte: String(p.texte ?? entree?.texte ?? ''),
           prio: entree?.prio ?? false,
           echeance: entree?.echeance ?? null,
+          doc: entree?.doc ?? false,
         }
       }),
     }))
 
     if (themes.length === 0) {
-      const questions = ouvertes.filter(e => e.projet === projet && e.type === 'question')
-      themes = [{ titre: 'Questions', points: questions.map(e => ({ id: e.id, texte: e.texte, prio: e.prio, echeance: e.echeance })) }]
+      const points = ouvertes.filter(e =>
+        slug ? e.reunion === slug : e.projet === projet && e.type === 'question',
+      )
+      themes = [{ titre: 'Points', points: points.map(e => ({ id: e.id, texte: e.texte, prio: e.prio, echeance: e.echeance, doc: e.doc })) }]
     }
 
     const total = themes.reduce((n, t) => n + t.points.length, 0)
 
     return {
-      carte: { genre: 'reunion', projets: [], reunion: { projet, themes } },
-      resume: `Ordre du jour affiché au user (${projet}, ${total} point(s)).`,
+      carte: { genre: 'reunion', projets: [], reunion: { titre, date: chaine(input.date), themes } },
+      resume: `Ordre du jour affiché au user (${titre}, ${total} point(s)).`,
     }
   }
 
@@ -269,14 +288,7 @@ async function majBandeau($: EngineInterface, texte: string): Promise<void> {
     projet,
     taches: ouvertes.filter(e => e.type === 'tache').length,
     questions: ouvertes.filter(e => e.type === 'question').length,
-    entrees: ouvertes.map(e => ({
-      id: e.id,
-      type: e.type,
-      texte: e.texte,
-      prio: e.prio,
-      echeance: e.echeance,
-      statut: 'ouverte',
-    })),
+    entrees: ouvertes.map(versVue),
   }
   await update($, bandeau, () => valeur)
 }
@@ -370,8 +382,10 @@ export const register: Register = on => {
           <Text strikethrough={faite} dimColor={faite} bold={v.statut === 'ajoutee'}>
             {v.texte}
           </Text>
+          {v.doc ? <Text> 📎</Text> : null}
           {v.prio ? <Text color="red" bold> PRIO</Text> : null}
           {v.echeance ? <Text color="magenta"> 📅 {v.echeance}</Text> : null}
+          {v.reunion ? <Text color="magenta" dimColor> 🗓 {v.reunion}</Text> : null}
           {v.statut === 'ajoutee' ? <Text color="green"> ← ajoutée</Text> : null}
           {v.statut === 'faite' ? <Text color="green"> ← faite</Text> : null}
           {v.statut === 'modifiee' ? <Text color="yellow"> ← modifiée</Text> : null}
@@ -397,7 +411,7 @@ export const register: Register = on => {
     }
 
     if (carte.genre === 'reunion' && carte.reunion) {
-      const { projet, themes } = carte.reunion
+      const { projet, titre, date, themes } = carte.reunion
       const total = themes.reduce((n, t) => n + t.points.length, 0)
 
       return (
@@ -406,8 +420,9 @@ export const register: Register = on => {
           <Box flexDirection="column" borderStyle="round" borderColor="magenta" paddingX={1}>
             <Text>
               <Text bold color="magenta">
-                🗓 Réunion client — {projet}
+                🗓 {titre ?? `Réunion — ${projet ?? ''}`}
               </Text>
+              {date ? <Text color="magenta"> · {date}</Text> : null}
               <Text dimColor>
                 {' · '}
                 {total} point{total > 1 ? 's' : ''}
@@ -424,6 +439,7 @@ export const register: Register = on => {
                       <Text>{'  • '}</Text>
                       {p.prio ? <Text color="red" bold>PRIO </Text> : null}
                       <Text>{p.texte}</Text>
+                      {p.doc ? <Text> 📎</Text> : null}
                       {p.echeance ? <Text color="magenta"> 📅 {p.echeance}</Text> : null}
                       <Text dimColor> #{p.id}</Text>
                     </Text>
@@ -447,7 +463,7 @@ export const register: Register = on => {
               <Text bold>✅ TODO</Text>
               <Text dimColor>
                 {' · '}
-                {nbTaches} tâche{nbTaches > 1 ? 's' : ''} · {nbQuestions} question{nbQuestions > 1 ? 's' : ''} client
+                {nbTaches} tâche{nbTaches > 1 ? 's' : ''} · {nbQuestions} point{nbQuestions > 1 ? 's' : ''} de réunion
               </Text>
             </Text>
           ) : null}
@@ -459,7 +475,7 @@ export const register: Register = on => {
               </Text>
               {p.entrees.length === 0 ? <Text dimColor> Rien d'ouvert 🎉</Text> : null}
               {section('TÂCHES', p.entrees.filter(v => v.type === 'tache'), `t${p.nom}`)}
-              {section('QUESTIONS CLIENT', p.entrees.filter(v => v.type === 'question'), `q${p.nom}`)}
+              {section('RÉUNION', p.entrees.filter(v => v.type === 'question'), `q${p.nom}`)}
             </Box>
           ))}
         </Box>
@@ -483,8 +499,10 @@ export const register: Register = on => {
       <Text key={`b${v.id}`}>
         <Text dimColor>{'   ☐ '}#{v.id} </Text>
         <Text>{v.texte}</Text>
+        {v.doc ? <Text> 📎</Text> : null}
         {v.prio ? <Text color="red" bold> PRIO</Text> : null}
         {v.echeance ? <Text color="magenta"> 📅 {v.echeance}</Text> : null}
+        {v.reunion ? <Text color="magenta" dimColor> 🗓 {v.reunion}</Text> : null}
       </Text>
     )
 
@@ -507,11 +525,11 @@ export const register: Register = on => {
           </Text>
           <Text dimColor>
             {' · '}
-            {b.taches} tâche{s(b.taches)} · {b.questions} question{s(b.questions)} client
+            {b.taches} tâche{s(b.taches)} · {b.questions} point{s(b.questions)} de réunion
           </Text>
         </Button>
         {ouvert ? section('TÂCHES', entrees.filter(v => v.type === 'tache'), 'bt') : null}
-        {ouvert ? section('QUESTIONS CLIENT', entrees.filter(v => v.type === 'question'), 'bq') : null}
+        {ouvert ? section('RÉUNION', entrees.filter(v => v.type === 'question'), 'bq') : null}
       </Box>
     )
   })

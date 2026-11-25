@@ -7,11 +7,14 @@ export type EntreeVue = {
   prio: boolean
   echeance: string | null
   statut: Statut
+  // absents dans les cartes antérieures à la 0.4.0
+  reunion?: string | null
+  doc?: boolean
 }
 
 export type ProjetVue = { nom: string; entrees: EntreeVue[] }
 
-export type PointVue = { id: number; texte: string; prio: boolean; echeance: string | null }
+export type PointVue = { id: number; texte: string; prio: boolean; echeance: string | null; doc?: boolean }
 
 export type ThemeVue = { titre: string; points: PointVue[] }
 
@@ -19,7 +22,8 @@ export type ThemeVue = { titre: string; points: PointVue[] }
 export type Carte = {
   genre?: 'modif' | 'todo' | 'reunion'
   projets: ProjetVue[]
-  reunion?: { projet: string; themes: ThemeVue[] }
+  // `titre` absent avant la 0.4.0 : on affiche alors « Réunion — <projet> »
+  reunion?: { projet?: string; titre?: string; date?: string | null; themes: ThemeVue[] }
 }
 
 // `entrees` absent dans une valeur écrite par la 0.1.0

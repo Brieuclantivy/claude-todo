@@ -27,15 +27,13 @@ else
   echo "Hook ajouté dans $SETTINGS (ancienne version : $SETTINGS.bak)"
 fi
 
-# 3. Fichier TODO : récupéré depuis Nextcloud si configuré, sinon créé vide
+# 3. Dossier ~/todo : récupéré en entier depuis Nextcloud si configuré, sinon TODO.md créé vide
 mkdir -p "$HOME/todo"
 if [ -f "$HOME/todo/TODO.md" ]; then
   echo "~/todo/TODO.md existe déjà : conservé"
 elif [ -f "$HOME/.config/todo-nextcloud.env" ]; then
-  . "$HOME/.config/todo-nextcloud.env"
-  curl -fsS -u "$NC_USER:$NC_APP_PASSWORD" -o "$HOME/todo/TODO.md" \
-    "$NC_URL/remote.php/dav/files/$NC_USER/$NC_DOSSIER/TODO.md"
-  echo "~/todo/TODO.md récupéré depuis Nextcloud"
+  "$REPO/skill/sauvegarde.sh" --restaurer
+  echo "~/todo/ récupéré depuis Nextcloud"
 else
   printf '# TODO\n' > "$HOME/todo/TODO.md"
   echo "~/todo/TODO.md créé (vide). Sauvegarde Nextcloud non configurée : voir README.md"
